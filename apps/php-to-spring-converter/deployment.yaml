@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: php-to-spring-converter
+  labels:
+    app: php-to-spring-converter
+  annotations:
+    # Redeploy whenever a build pushes a new php-to-spring-converter:latest.
+    image.openshift.io/triggers: >-
+      [{"from":{"kind":"ImageStreamTag","name":"php-to-spring-converter:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"php-to-spring-converter\")].image"}]
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      deployment: php-to-spring-converter
+  template:
+    metadata:
+      labels:
+        deployment: php-to-spring-converter
+    spec:
+      containers:
+        - name: php-to-spring-converter
+          image: php-to-spring-converter:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8080"
+            - name: APP_DEVELOPER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: php-to-spring-converter-secrets
+                  key: APP_DEVELOPER_PASSWORD
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: php-to-spring-converter-secrets
+                  key: GEMINI_API_KEY
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: php-to-spring-converter-secrets
+                  key: GITHUB_TOKEN
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 384Mi
+            limits:
+              memory: 768Mi

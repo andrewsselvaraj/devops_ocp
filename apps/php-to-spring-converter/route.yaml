@@ -1,0 +1,21 @@
+# HTTPS route; the host is generated as php-to-spring-converter-<project>.<cluster apps domain>.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: php-to-spring-converter
+  labels:
+    app: php-to-spring-converter
+  annotations:
+    # A Gemini conversion can take minutes; the router default is 30s.
+    haproxy.router.openshift.io/timeout: 10m
+spec:
+  to:
+    kind: Service
+    name: php-to-spring-converter
+    weight: 100
+  port:
+    targetPort: 8080-tcp
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

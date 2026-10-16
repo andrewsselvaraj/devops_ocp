@@ -1,0 +1,10 @@
+# Image produced by the S2I build.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: php-to-spring-converter
+  labels:
+    app: php-to-spring-converter
+spec:
+  lookupPolicy:
+    local: false

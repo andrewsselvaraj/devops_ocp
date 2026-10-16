@@ -1,0 +1,2 @@
+# Filled-in secrets stay local.
+apps/*/secret.yaml
