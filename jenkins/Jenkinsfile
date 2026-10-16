@@ -1,6 +1,14 @@
 // Deploy pipeline for one app: test, build the image in OpenShift, wait for the rollout, smoke test.
 // Each Jenkins job is named deploy-<app> (see create-jobs.sh); the app comes from the job name.
 // Runs in a throwaway pod: `jnlp` has oc (service account jenkins, edit role), `maven` has JDK 17 + Maven.
+
+APP_REPOS = [
+    'php-to-spring-converter': 'https://github.com/andrewsselvaraj/php-to-spring-converter.git',
+    'neet-chat'              : 'https://github.com/andrewsselvaraj/NEET_CHAT.git',
+]
+// Job "deploy-<app>" deploys <app>.
+APP_NAME = env.JOB_BASE_NAME.replaceFirst('^deploy-', '')
+
 pipeline {
     agent {
         kubernetes {
@@ -41,12 +49,8 @@ spec:
     }
 
     environment {
-        // Job "deploy-<app>" deploys <app>.
-        APP = "${env.JOB_BASE_NAME.replaceFirst('^deploy-', '')}"
-        APP_REPO = "${[
-            'php-to-spring-converter': 'https://github.com/andrewsselvaraj/php-to-spring-converter.git',
-            'neet-chat'              : 'https://github.com/andrewsselvaraj/NEET_CHAT.git',
-        ][env.JOB_BASE_NAME.replaceFirst('^deploy-', '')]}"
+        APP = "${APP_NAME}"
+        APP_REPO = "${APP_REPOS[APP_NAME]}"
     }
 
     stages {
