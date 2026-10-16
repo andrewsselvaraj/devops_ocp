@@ -9,8 +9,12 @@ url="https://$(oc get route jenkins -o jsonpath='{.spec.host}')"
 auth="Authorization: Bearer $(oc whoami -t)"
 jar="$(mktemp)"; trap 'rm -f "$jar"' EXIT
 
-crumb="$(curl -fsS -c "$jar" -b "$jar" -H "$auth" "$url/crumbIssuer/api/json" \
-  | sed -E 's/.*"crumbRequestField":"([^"]+)".*"crumb":"([^"]+)".*/\1:\2/; t; s/.*"crumb":"([^"]+)".*"crumbRequestField":"([^"]+)".*/\2:\1/')"
+# CSRF crumb, when the crumb issuer is enabled (token-authenticated calls work without one).
+crumb="X-No-Crumb: 1"
+if json="$(curl -fsS -c "$jar" -b "$jar" -H "$auth" "$url/crumbIssuer/api/json" 2>/dev/null)"; then
+  crumb="$(printf '%s' "$json" \
+    | sed -E 's/.*"crumbRequestField":"([^"]+)".*"crumb":"([^"]+)".*/\1:\2/; t; s/.*"crumb":"([^"]+)".*"crumbRequestField":"([^"]+)".*/\2:\1/')"
+fi
 
 apps=("$@")
 [ ${#apps[@]} -gt 0 ] || apps=($(ls "$root/apps"))
