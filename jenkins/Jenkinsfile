@@ -1,0 +1,100 @@
+// Deploy pipeline for one app: test, build the image in OpenShift, wait for the rollout, smoke test.
+// Each Jenkins job is named deploy-<app> (see create-jobs.sh); the app comes from the job name.
+// Runs in a throwaway pod: `jnlp` has oc (service account jenkins, edit role), `maven` has JDK 17 + Maven.
+pipeline {
+    agent {
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: jenkins
+  containers:
+    - name: jnlp
+      image: image-registry.openshift-image-registry.svc:5000/openshift/jenkins-agent-base:latest
+      resources:
+        requests: { cpu: 50m, memory: 256Mi }
+        limits: { memory: 512Mi }
+    - name: maven
+      image: registry.access.redhat.com/ubi9/openjdk-17:latest
+      command: [sleep]
+      args: [infinity]
+      env:
+        - name: HOME
+          value: /home/jenkins/agent
+      resources:
+        requests: { cpu: 200m, memory: 512Mi }
+        limits: { memory: 1Gi }
+'''
+        }
+    }
+
+    triggers {
+        // Checks the app repo (and this repo) for new commits on main.
+        pollSCM('H/5 * * * *')
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    environment {
+        // Job "deploy-<app>" deploys <app>.
+        APP = "${env.JOB_BASE_NAME.replaceFirst('^deploy-', '')}"
+        APP_REPO = "${[
+            'php-to-spring-converter': 'https://github.com/andrewsselvaraj/php-to-spring-converter.git',
+            'neet-chat'              : 'https://github.com/andrewsselvaraj/NEET_CHAT.git',
+        ][env.JOB_BASE_NAME.replaceFirst('^deploy-', '')]}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                dir('app') {
+                    git url: env.APP_REPO, branch: 'main'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                container('maven') {
+                    dir('app') {
+                        sh 'mvn -B verify -Dmaven.repo.local=$HOME/.m2/repository'
+                    }
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'app/target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Build image') {
+            steps {
+                // The BuildConfig builds main from GitHub; --wait fails this stage if the build fails.
+                sh 'oc start-build "$APP" --follow --wait'
+            }
+        }
+
+        stage('Rollout') {
+            steps {
+                sh 'oc rollout status "deployment/$APP" --timeout=10m'
+            }
+        }
+
+        stage('Smoke test') {
+            steps {
+                sh '''
+                    host=$(oc get route "$APP" -o jsonpath='{.spec.host}')
+                    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://$host/")
+                    echo "https://$host/ -> HTTP $code"
+                    case "$code" in 200|302) ;; *) exit 1 ;; esac
+                '''
+            }
+        }
+    }
+}

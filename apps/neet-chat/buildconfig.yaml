@@ -1,5 +1,5 @@
 # Builds the Dockerfile from GitHub and pushes neet-chat:latest.
-# Builds run automatically after CI passes on main; manual rebuild: oc start-build neet-chat --follow
+# Started by the Jenkins job deploy-neet-chat; manual rebuild: oc start-build neet-chat --follow
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
@@ -26,11 +26,6 @@ spec:
   successfulBuildsHistoryLimit: 5
   failedBuildsHistoryLimit: 5
   triggers:
-    # Called by GitHub Actions after tests pass on main (see scripts/setup-ci.sh).
-    - type: Generic
-      generic:
-        secretReference:
-          name: neet-chat-webhook
     - type: ConfigChange
     - type: ImageChange
       imageChange: {}

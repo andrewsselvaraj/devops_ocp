@@ -10,37 +10,43 @@ CI/CD and OpenShift deployment for these Spring Boot apps:
 ## How a change reaches OpenShift
 
 ```text
-push to main ──> GitHub Actions: mvn verify ──(tests pass)──> POST BuildConfig webhook
-                                                                    │
-                          Deployment rolls out <── image pushed <── OpenShift build
+push / pull request ──> GitHub Actions: mvn verify            (tests only, every branch)
+
+push to main ──> Jenkins job deploy-<app> (polls GitHub every 5 min, or Build Now)
+                   Checkout ─> Test ─> Build image ─> Rollout ─> Smoke test
+                                         │               │
+                              oc start-build <app>   Deployment picks up the new image
 ```
 
-- Pull requests and other branches run the tests only.
-- GitHub holds only a webhook URL (`OCP_BUILD_WEBHOOK`), never cluster credentials. The URL can start a build and nothing else.
-- No Jenkins: OpenShift's BuildConfig does the build, and the Deployment's image trigger does the rollout.
+- Jenkins runs in the same OpenShift project and logs in with your OpenShift account.
+- Each pipeline run uses a throwaway pod: `jnlp` (has `oc`, runs as the `jenkins` service account with the edit role) and `maven` (JDK 17 and Maven).
+- GitHub Actions only tests. It never touches the cluster and needs no secrets.
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
-| `.github/workflows/maven-ci.yml` | Reusable workflow the app repos call: test, then trigger the build |
+| `jenkins/Jenkinsfile` | Deploy pipeline shared by all apps; the job name `deploy-<app>` selects the app |
+| `jenkins/install.sh` | Installs Jenkins (`jenkins-persistent` template, 2Gi memory, 1Gi volume) and creates the jobs |
+| `jenkins/create-jobs.sh` | Creates or updates the `deploy-<app>` jobs through the Jenkins API |
+| `.github/workflows/maven-ci.yml` | Reusable test workflow the app repos call |
 | `apps/<app>/` | Manifests: ImageStream, BuildConfig, Deployment, Service, Route, `secret.yaml.example` |
 | `apps/<app>/secret.yaml` | Your filled-in secret (git-ignored, stays on your machine) |
-| `cluster/webhook-access.yaml` | Lets webhook calls into the project (OpenShift 4 blocks them by default) |
 | `scripts/deploy.sh` | Applies one app's secret and manifests |
-| `scripts/setup-ci.sh` | Creates the webhook secret and stores the URL in the app's GitHub repo |
 
-## Set up an app
+## Set up from scratch
 
-Log in first with `oc login` (and `gh auth login`), then:
+Log in first with `oc login`, then:
 
 ```text
 cp apps/neet-chat/secret.yaml.example apps/neet-chat/secret.yaml   # fill in the values
 scripts/deploy.sh neet-chat
-scripts/setup-ci.sh neet-chat andrewsselvaraj/NEET_CHAT
+jenkins/install.sh
 ```
 
-The app repo needs `.github/workflows/ci.yml`:
+To add another app: put its manifests in `apps/<app>/`, add its repo URL to the map in `jenkins/Jenkinsfile`, and run `jenkins/create-jobs.sh <app>`.
+
+The app repo's `.github/workflows/ci.yml`:
 
 ```yaml
 name: ci
@@ -51,12 +57,11 @@ on:
 jobs:
   ci:
     uses: andrewsselvaraj/devops_ocp/.github/workflows/maven-ci.yml@main
-    secrets: inherit
 ```
 
 ## Day to day
 
-- Deploy code: merge or push to `main`. Watch it with `oc get builds -w`.
-- Rebuild by hand: `oc start-build <app> --follow`.
+- Deploy code: push to `main`; Jenkins picks it up within 5 minutes. Or open the job in Jenkins and click **Build Now**.
+- Jenkins URL: `oc get route jenkins`.
 - Change a key: edit `apps/<app>/secret.yaml`, run `oc apply -f apps/<app>/secret.yaml`, then `oc rollout restart deployment/<app>`.
-- Developer Sandbox scales apps to zero after 12 hours: `oc scale deployment/<app> --replicas=1`.
+- Developer Sandbox scales apps (and Jenkins) to zero after 12 hours: `oc scale deployment/<app> --replicas=1` and `oc scale dc/jenkins --replicas=1`.

@@ -1,15 +1,11 @@
-# Reusable CI/CD for the Spring Boot apps deployed to OpenShift.
+# Reusable test workflow for the Spring Boot apps: runs `mvn verify` on every push and pull request.
+# Deploys are done by Jenkins (jenkins/Jenkinsfile), not here.
 #
 # In an app repo, .github/workflows/ci.yml:
 #   on: { push: { branches: [main] }, pull_request: {} }
 #   jobs:
 #     ci:
 #       uses: andrewsselvaraj/devops_ocp/.github/workflows/maven-ci.yml@main
-#       secrets: inherit
-#
-# 1. Runs `mvn verify` on every push and pull request.
-# 2. On a push to main, when the tests pass and the repo has the OCP_BUILD_WEBHOOK secret
-#    (set by scripts/setup-ci.sh), calls the BuildConfig webhook so OpenShift rebuilds and redeploys.
 name: maven-ci
 
 on:
@@ -18,9 +14,6 @@ on:
       java-version:
         type: string
         default: "17"
-    secrets:
-      OCP_BUILD_WEBHOOK:
-        required: false
 
 jobs:
   test:
@@ -34,18 +27,3 @@ jobs:
           cache: maven
       - run: mvn -B verify
 
-  deploy:
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger OpenShift build
-        env:
-          WEBHOOK: ${{ secrets.OCP_BUILD_WEBHOOK }}
-        run: |
-          if [ -z "$WEBHOOK" ]; then
-            echo "::notice::OCP_BUILD_WEBHOOK is not set; skipping deploy. Run scripts/setup-ci.sh in devops_ocp."
-            exit 0
-          fi
-          curl -fsS -X POST -H "Content-Type: application/json" -d '{}' "$WEBHOOK" -o /dev/null
-          echo "OpenShift build triggered for ${GITHUB_SHA}."

@@ -1,5 +1,5 @@
 # Source-to-Image build from GitHub with OpenShift's Java 17 builder (no Dockerfile needed).
-# Builds run automatically after CI passes on main; manual rebuild: oc start-build php-to-spring-converter --follow
+# Started by the Jenkins job deploy-php-to-spring-converter; manual rebuild: oc start-build php-to-spring-converter --follow
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
@@ -27,11 +27,6 @@ spec:
   successfulBuildsHistoryLimit: 5
   failedBuildsHistoryLimit: 5
   triggers:
-    # Called by GitHub Actions after tests pass on main (see scripts/setup-ci.sh).
-    - type: Generic
-      generic:
-        secretReference:
-          name: php-to-spring-converter-webhook
     - type: ConfigChange
     - type: ImageChange
       imageChange: {}
