@@ -9,6 +9,8 @@ metadata:
     image.openshift.io/triggers: >-
       [{"from":{"kind":"ImageStreamTag","name":"php-to-spring-converter:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"php-to-spring-converter\")].image"}]
 spec:
+  # Keep 2 old ReplicaSets for rollback; the Developer Sandbox allows 30 per project.
+  revisionHistoryLimit: 2
   replicas: 1
   selector:
     matchLabels:
