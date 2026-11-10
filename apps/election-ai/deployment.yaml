@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: election-ai
+  labels:
+    app: election-ai
+  annotations:
+    # Redeploy whenever a build pushes a new election-ai:latest.
+    image.openshift.io/triggers: >-
+      [{"from":{"kind":"ImageStreamTag","name":"election-ai:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"election-ai\")].image"}]
+spec:
+  # Keep 2 old ReplicaSets for rollback; the Developer Sandbox allows 30 per project.
+  revisionHistoryLimit: 2
+  replicas: 1
+  selector:
+    matchLabels:
+      deployment: election-ai
+  template:
+    metadata:
+      labels:
+        deployment: election-ai
+    spec:
+      containers:
+        - name: election-ai
+          image: election-ai:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          # No secrets: the app reads public PDFs from elections.tn.gov.in and erolls.tn.gov.in.
+          # The first request loads the constituency list from the web (bundled copy if unreachable).
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              # Form 20 and polling station PDFs (up to ~50 MB) are parsed in memory and results cached.
+              memory: 1000Mi

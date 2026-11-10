@@ -1,18 +1,24 @@
 // Deploy pipeline for one app: test, build the image in OpenShift, wait for the rollout, smoke test.
 // Each Jenkins job is named deploy-<app> (see create-jobs.sh); the app comes from the job name.
-// Runs in a throwaway pod: `jnlp` has oc (service account jenkins, edit role), `maven` has JDK 17 + Maven.
+// Runs in a throwaway pod: `jnlp` has oc (service account jenkins, edit role), `maven` has the app's JDK + Maven.
 
 APP_REPOS = [
     'php-to-spring-converter': 'https://github.com/andrewsselvaraj/php-to-spring-converter.git',
     'neet-chat'              : 'https://github.com/andrewsselvaraj/NEET_CHAT.git',
+    'election-ai'            : 'https://github.com/andrewsselvaraj/election_ai.git',
+]
+// JDK used by the Test stage; apps not listed use 17.
+APP_JDKS = [
+    'election-ai': '21',
 ]
 // Job "deploy-<app>" deploys <app>.
 APP_NAME = env.JOB_BASE_NAME.replaceFirst('^deploy-', '')
+MAVEN_IMAGE = "registry.access.redhat.com/ubi9/openjdk-${APP_JDKS.get(APP_NAME, '17')}:latest"
 
 pipeline {
     agent {
         kubernetes {
-            yaml '''
+            yaml """
 apiVersion: v1
 kind: Pod
 spec:
@@ -24,7 +30,7 @@ spec:
         requests: { cpu: 50m, memory: 256Mi }
         limits: { memory: 512Mi }
     - name: maven
-      image: registry.access.redhat.com/ubi9/openjdk-17:latest
+      image: ${MAVEN_IMAGE}
       command: [sleep]
       args: [infinity]
       env:
@@ -33,7 +39,7 @@ spec:
       resources:
         requests: { cpu: 200m, memory: 512Mi }
         limits: { memory: 1Gi }
-'''
+"""
         }
     }
 

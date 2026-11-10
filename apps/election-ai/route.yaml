@@ -1,0 +1,22 @@
+# HTTPS route; the host is generated as election-ai-<project>.<cluster apps domain>.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: election-ai
+  labels:
+    app: election-ai
+  annotations:
+    # The first visit to a constituency downloads and parses its PDFs from the government sites,
+    # which can take longer than the router's 30s default.
+    haproxy.router.openshift.io/timeout: 3m
+spec:
+  to:
+    kind: Service
+    name: election-ai
+    weight: 100
+  port:
+    targetPort: 8080-tcp
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

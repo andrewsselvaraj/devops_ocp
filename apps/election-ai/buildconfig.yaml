@@ -1,0 +1,31 @@
+# Builds the Dockerfile from GitHub and pushes election-ai:latest.
+# Started by the Jenkins job deploy-election-ai; manual rebuild: oc start-build election-ai --follow
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: election-ai
+  labels:
+    app: election-ai
+spec:
+  runPolicy: Serial
+  source:
+    type: Git
+    git:
+      uri: https://github.com/andrewsselvaraj/election_ai.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      from:
+        kind: ImageStreamTag
+        name: openjdk-21-runtime:latest
+  output:
+    to:
+      kind: ImageStreamTag
+      name: election-ai:latest
+  successfulBuildsHistoryLimit: 5
+  failedBuildsHistoryLimit: 5
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange
+      imageChange: {}
